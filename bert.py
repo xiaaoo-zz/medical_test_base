@@ -30,8 +30,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # In[ ]:
 
 
-visdom_env_name = 'combined_overlapped---need_update'
-train_file = 'train_combined_overlapped.tsv'
+visdom_env_name = 'nothing1' #combined_overlapped---need_update
+train_file = 'train_3000_combined_qs_title.tsv'
 data_dir = "data/combined_overlapped" # ! FIXME need to update testing data && update accuracy for evaluation result 
 
 
@@ -60,6 +60,18 @@ WEIGHTS_NAME = 'pytorch_model.bin'
 report_file_name = f'no_weight_decay_lr={LEARNING_RATE}, epoch={num_train_epochs}, train_file={train_file}, max_seq_length={MAX_SEQ_LENGTH}, batch_size={per_gpu_train_batch_size}'
 print(report_file_name)
 
+# In[ ]:
+# ensure the following statements is evaluated before any other process
+import random
+import numpy as np
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if device.type == 'cuda':
+        torch.cuda.manual_seed_all(seed)
+
+set_seed(42) # For reproductivity
 
 # # Fine tunning bert
 
@@ -85,18 +97,6 @@ tokenizer = BertTokenizer.from_pretrained('bert-base-chinese')
 model.to(device)
 
 
-# In[ ]:
-
-
-import random
-import numpy as np
-def set_seed(seed):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if device.type == 'cuda':
-        torch.cuda.manual_seed_all(seed)
-
 
 # In[ ]:
 
@@ -113,6 +113,7 @@ n_gpus = torch.cuda.device_count()
 loss_log = [] 
 
 def train(train_task_name, model, tokenizer):
+    set_seed(42) # for reproductibility 
     
     # prepare training dataset
     train_features = convert_examples_to_features(train_examples,
@@ -184,7 +185,7 @@ def train(train_task_name, model, tokenizer):
     tr_loss, loging_loss = 0.0, 0.0
     model.zero_grad()
     train_iterator = trange(int(num_train_epochs), desc='Epoch')
-    set_seed(42) # for reproductibility 
+    
     for _ in train_iterator:
         
         epoch_iterator = tqdm(train_dataloader, desc="Iteration")

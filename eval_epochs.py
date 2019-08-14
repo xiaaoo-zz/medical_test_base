@@ -62,6 +62,20 @@ report_file_name = f'no_weight_decay_lr={LEARNING_RATE}, epoch={num_train_epochs
 print(report_file_name)
 
 
+# In[ ]:
+# ensure the following statements is evaluated before any other process
+import random
+import numpy as np
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if device.type == 'cuda':
+        torch.cuda.manual_seed_all(seed)
+
+
+set_seed(42) # For reproductivity
+
 # # Fine tunning bert
 
 # In[ ]:
@@ -76,19 +90,6 @@ num_labels = len(label_list)
 
 
 
-
-
-# In[ ]:
-
-
-import random
-import numpy as np
-def set_seed(seed):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if device.type == 'cuda':
-        torch.cuda.manual_seed_all(seed)
 
 
 # In[ ]:
