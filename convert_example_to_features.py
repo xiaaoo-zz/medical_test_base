@@ -1,4 +1,5 @@
 import logging
+from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
 
@@ -46,9 +47,9 @@ def convert_examples_to_features(examples, label_list, max_seq_length,
     label_map = {label : i for i, label in enumerate(label_list)}
 
     features = []
-    for (ex_index, example) in enumerate(examples): 
-        if ex_index % 10000 == 0:
-            logger.info("Writing example %d of %d" % (ex_index, len(examples)))
+    for (ex_index, example) in enumerate(tqdm(examples)): 
+        # if ex_index % 10000 == 0:
+        #     logger.info("Writing example %d of %d" % (ex_index, len(examples)))
 
         tokens_a = tokenizer.tokenize(example.text_a)
 
@@ -140,3 +141,79 @@ def convert_examples_to_features(examples, label_list, max_seq_length,
                               segment_ids=segment_ids,
                               label_id=label_id))
     return features
+
+
+
+# for multiprocessing
+def convert_example_to_feature(example_row, cls_token_at_end=False, pad_on_left=False,
+                                 cls_token='[CLS]', sep_token='[SEP]', pad_token=0,
+                                 sequence_a_segment_id=0, sequence_b_segment_id=1,
+                                 cls_token_segment_id=0, pad_token_segment_id=0,
+                                 mask_padding_with_zero=True):
+    example, label_map, max_seq_length, tokenizer, output_mode = example_row
+    
+    
+    tokens_a = tokenizer.tokenize(example.text_a)
+
+    tokens_b = None
+    if example.text_b:
+        tokens_b = tokenizer.tokenize(example.text_b)
+        # Modifies `tokens_a` and `tokens_b` in place so that the total
+        # length is less than the specified length.
+        # Account for [CLS], [SEP], [SEP] with "- 3"
+        _truncate_seq_pair(tokens_a, tokens_b, max_seq_length - 3)
+    else:
+        # Account for [CLS] and [SEP] with "- 2"
+        if len(tokens_a) > max_seq_length - 2:
+            tokens_a = tokens_a[:(max_seq_length - 2)]
+
+
+    tokens = tokens_a + [sep_token]
+    segment_ids = [sequence_a_segment_id] * len(tokens)
+
+    if tokens_b:
+        tokens += tokens_b + [sep_token]
+        segment_ids += [sequence_b_segment_id] * (len(tokens_b) + 1)
+
+    if cls_token_at_end:
+        tokens = tokens + [cls_token]
+        segment_ids = segment_ids + [cls_token_segment_id]
+    else:
+        tokens = [cls_token] + tokens
+        segment_ids = [cls_token_segment_id] + segment_ids
+
+    input_ids = tokenizer.convert_tokens_to_ids(tokens)
+
+    # The mask has 1 for real tokens and 0 for padding tokens. Only real
+    # tokens are attended to.
+    input_mask = [1 if mask_padding_with_zero else 0] * len(input_ids)
+
+    # Zero-pad up to the sequence length.
+    padding_length = max_seq_length - len(input_ids)
+    if pad_on_left:
+        input_ids = ([pad_token] * padding_length) + input_ids
+        input_mask = ([0 if mask_padding_with_zero else 1] * padding_length) + input_mask
+        segment_ids = ([pad_token_segment_id] * padding_length) + segment_ids
+    else:
+        input_ids = input_ids + ([pad_token] * padding_length)
+        input_mask = input_mask + ([0 if mask_padding_with_zero else 1] * padding_length)
+        segment_ids = segment_ids + ([pad_token_segment_id] * padding_length)
+
+    assert len(input_ids) == max_seq_length
+    assert len(input_mask) == max_seq_length
+    assert len(segment_ids) == max_seq_length
+
+    if output_mode == "classification":
+        label_id = label_map[example.label]
+    elif output_mode == "regression":
+        label_id = float(example.label)
+    else:
+        raise KeyError(output_mode)
+
+
+
+    return InputFeatures(input_ids=input_ids,
+                              input_mask=input_mask,
+                              segment_ids=segment_ids,
+                              label_id=label_id)
+        

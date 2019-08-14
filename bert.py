@@ -31,33 +31,34 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 visdom_env_name = 'nothing1' #combined_overlapped---need_update
-train_file = 'train_3000_combined_qs_title.tsv'
+train_file = 'train_combined_overlapped.tsv'
 data_dir = "data/combined_overlapped" # ! FIXME need to update testing data && update accuracy for evaluation result 
 
 
 
+use_multiprocessing = True
+bert_model = 'bert-base-chinese'
 
-BERT_MODEL = 'bert-base-chinese'
-
-OUTPUT_DIR = 'outputs/'
-REPORT_DIR = 'reports/'
-CACHE_DIR = 'cache/'
+output_dir = 'outputs/'
+report_dir = 'reports/'
+cache_dir = 'cache/'
 max_steps = -1
-MAX_SEQ_LENGTH = 512
+max_seq_length = 512
 per_gpu_train_batch_size = 6 # change this to 6 if max_seq_length is 512
 per_gpu_eval_size = 8
-LEARNING_RATE = 2e-5
+learning_rate = 2e-5
 num_train_epochs = 15
-RANDOM_SEED = 42
+random_seed = 42
+
 gradient_accumulation_steps = 1
 warmup_proportion = 0.1
-OUTPUT_MODE = 'classification'
+output_mode = 'classification'
 # classification
 CONFIG_NAME = 'config.json'
 WEIGHTS_NAME = 'pytorch_model.bin'
 
 # file name has been modified
-report_file_name = f'no_weight_decay_lr={LEARNING_RATE}, epoch={num_train_epochs}, train_file={train_file}, max_seq_length={MAX_SEQ_LENGTH}, batch_size={per_gpu_train_batch_size}'
+report_file_name = f'no_weight_decay_lr={learning_rate}, epoch={num_train_epochs}, train_file={train_file}, max_seq_length={max_seq_length}, batch_size={per_gpu_train_batch_size}'
 print(report_file_name)
 
 # In[ ]:
@@ -89,8 +90,8 @@ num_labels = len(label_list)
 # In[ ]:
 
 
-model = BertForSequenceClassification.from_pretrained(BERT_MODEL, 
-                                                      cache_dir=CACHE_DIR, 
+model = BertForSequenceClassification.from_pretrained(bert_model, 
+                                                      cache_dir=cache_dir, 
                                                       num_labels=num_labels)
 # Load pre-trained model tokenizer (vocabulary)
 tokenizer = BertTokenizer.from_pretrained('bert-base-chinese')
@@ -108,25 +109,35 @@ n_gpus = torch.cuda.device_count()
 # n_gpus = 1
 
 # In[ ]:
+# tokenizer is needed here
+def convert_to_input_features_helper(input_examples, tokenizer, multiprocessing=False):
+    if not multiprocessing:
+        return convert_examples_to_features(input_examples,
+                                             label_list,
+                                             max_seq_length,
+                                             tokenizer,
+                                             output_mode)
+    else: # multiprocessing
+        label_map = {label : i for i, label in enumerate(label_list)}
+        input_multiprocessing = [(example, label_map, max_seq_length, tokenizer, output_mode) for example in input_examples]
+        with Pool(cpu_count()) as p:
+            return list(tqdm(p.map(convert_example_to_feature, input_multiprocessing)))
 
 
+# In[ ]:
 loss_log = [] 
 
 def train(train_task_name, model, tokenizer):
     set_seed(42) # for reproductibility 
     
     # prepare training dataset
-    train_features = convert_examples_to_features(train_examples,
-                                             label_list,
-                                             MAX_SEQ_LENGTH,
-                                             tokenizer,
-                                             OUTPUT_MODE)
+    train_features = convert_to_input_features_helper(train_examples, tokenizer, use_multiprocessing)
 
     all_input_ids = torch.tensor([f.input_ids for f in train_features], dtype=torch.long)
     all_input_mask = torch.tensor([f.input_mask for f in train_features], dtype=torch.long)
     all_segment_ids = torch.tensor([f.segment_ids for f in train_features], dtype=torch.long)
     
-    if OUTPUT_MODE == "classification":
+    if output_mode == "classification":
         all_label_ids = torch.tensor([f.label_id for f in train_features], dtype=torch.long)
     
     train_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
@@ -154,7 +165,7 @@ def train(train_task_name, model, tokenizer):
         ]
     
     optimizer = AdamW(optimizer_grouped_parameters,
-                     lr=LEARNING_RATE,
+                     lr=learning_rate,
                      eps=1e-8) 
     scheduler = WarmupLinearSchedule(optimizer, 
                                  warmup_steps=warmup_steps,
@@ -296,7 +307,7 @@ def train(train_task_name, model, tokenizer):
 
 def save_model_in_epoch(epoch):
     epoch = str(epoch)
-    dir_path = f'{CACHE_DIR}epoch_{epoch}/'
+    dir_path = f'{cache_dir}epoch_{epoch}/'
     if not os.path.exists(dir_path):
         os.mkdir(dir_path)
     save_model(dir_path)
@@ -324,8 +335,8 @@ def save_model(dir_path):
 
 
 def evaluate_model_in_epoch(epoch, eval_task_name):
-    cache_path = f'{CACHE_DIR}epoch_{epoch}/'
-    
+    cache_path = f'{cache_dir}epoch_{epoch}/'
+    # Load a trained model and vocabulary that you have fine-tuned
     tokenizer = BertTokenizer.from_pretrained(cache_path)
     model = BertForSequenceClassification.from_pretrained(cache_path, 
                                                       cache_dir=cache_path, 
@@ -341,15 +352,13 @@ def evaluate(eval_task_name, model, tokenizer):
     eval_examples = processor.get_dev_examples(data_dir, eval_task_name)
     eval_examples_len = len(eval_examples)
     
-    eval_features = convert_examples_to_features(eval_examples, 
-                                                 label_list, 
-                                                 MAX_SEQ_LENGTH, 
-                                                 tokenizer, 
-                                                 OUTPUT_MODE)
+
+    eval_features = convert_to_input_features_helper(eval_examples, tokenizer, use_multiprocessing)
+
     all_input_ids = torch.tensor([f.input_ids for f in eval_features], dtype=torch.long)
     all_input_mask = torch.tensor([f.input_mask for f in eval_features], dtype=torch.long)
     all_segment_ids = torch.tensor([f.segment_ids for f in eval_features], dtype=torch.long)
-    if OUTPUT_MODE == "classification":
+    if output_mode == "classification":
         all_label_ids = torch.tensor([f.label_id for f in eval_features], dtype=torch.long)
 
 
@@ -380,7 +389,7 @@ def evaluate(eval_task_name, model, tokenizer):
         with torch.no_grad():
             inputs = {'input_ids':      batch[0],
                       'attention_mask': batch[1],
-                      'token_type_ids': batch[2],  # change this if using xlnet
+                      'token_type_ids': batch[2], 
                       'labels':         batch[3]}
             outputs = model(**inputs)
             tmp_eval_loss, logits = outputs[:2]
@@ -397,9 +406,9 @@ def evaluate(eval_task_name, model, tokenizer):
     before_argmax_preds = preds ## delete this 
 
     eval_loss = eval_loss / nb_eval_steps
-    if OUTPUT_MODE == "classification":
+    if output_mode == "classification":
         preds = np.argmax(preds, axis=1)
-    elif OUTPUT_MODE == "regression":
+    elif output_mode == "regression":
         preds = np.squeeze(preds)
 
     result = precision_recall_results(report_file_name, out_label_ids, preds) # report file name here
