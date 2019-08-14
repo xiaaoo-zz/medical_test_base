@@ -1,0 +1,18 @@
+/data
+
+/.ipynb_checkpoints
+
+/__pycache__
+
+/cache
+
+/reports
+
+/outputs
+
+/.DS_Store
+
+
+# preprocessing files
+/preprocessing.ipynb
+/textbook_snippet.ipynb
