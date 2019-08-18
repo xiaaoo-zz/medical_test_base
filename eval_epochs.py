@@ -14,6 +14,8 @@ import os
 from pytorch_transformers import BertTokenizer, BertModel, BertForMaskedLM, BertForSequenceClassification
 from pytorch_transformers.optimization import AdamW, WarmupLinearSchedule
 from multiprocessing import Pool, cpu_count
+import pandas as pd
+import numpy as np
 
 from utils import *
 from reports_tools import * # accuracy evaluation methods
@@ -30,13 +32,11 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # In[ ]:
 
 
-visdom_env_name = 'combined_qs_256'
-train_file = 'train_combined_qs.tsv'
+visdom_env_name = 'evaluation_75%'
+train_file = 'train_75%.tsv'
+DATA_DIR = "data/combined_overlapped"
 
 
-
-
-DATA_DIR = "data/"
 
 BERT_MODEL = 'bert-base-chinese'
 
@@ -44,8 +44,8 @@ OUTPUT_DIR = 'outputs/'
 REPORT_DIR = 'reports/'
 CACHE_DIR = 'cache/'
 max_steps = -1
-MAX_SEQ_LENGTH = 256
-per_gpu_train_batch_size = 16 # change this to 6 if max_seq_length is 512
+MAX_SEQ_LENGTH = 512
+per_gpu_train_batch_size = 6 # change this to 6 if max_seq_length is 512
 per_gpu_eval_size = 8
 LEARNING_RATE = 2e-5
 num_train_epochs = 30
@@ -83,16 +83,12 @@ set_seed(42) # For reproductivity
 
 processor = BinaryClassificationProcessor()
 train_examples = processor.get_train_examples(DATA_DIR, train_file)
-
-
 label_list = processor.get_labels() # [0, 1] for binary classification
 num_labels = len(label_list)
 
 
 
 
-
-# In[ ]:
 
 
 ## Training func
@@ -113,39 +109,13 @@ loss_step_values = []
 loss_epoch_values = []
 
 #%%
-print(len(os.listdir('./cache')) - 3)
-epoch_nums = len(os.listdir('./cache')) - 3
+print('Epoch num:', len(os.listdir('./cache')) - 2)
+epoch_nums = len(os.listdir('./cache')) - 2
 
 
      
 
 # ## visualization
-
-# In[ ]:
-
-
-def save_model_in_epoch(epoch):
-    epoch = str(epoch)
-    dir_path = f'{CACHE_DIR}epoch_{epoch}/'
-    if not os.path.exists(dir_path):
-        os.mkdir(dir_path)
-    save_model(dir_path)
-    print(dir_path)
-
-
-
-def save_model(dir_path):
-    model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
-    
-    # If we save using the predefined names, we can load using `from_pretrained`
-    output_model_file = os.path.join(dir_path, WEIGHTS_NAME)
-    output_config_file = os.path.join(dir_path, CONFIG_NAME)
-    print(output_config_file)
-    torch.save(model_to_save.state_dict(), output_model_file)
-    model_to_save.config.to_json_file(output_config_file)
-    tokenizer.save_vocabulary(dir_path)
-    
-    print(f'Model saved successfully at: {dir_path}')
 
 
 # ## evaluation methods
@@ -154,6 +124,9 @@ def save_model(dir_path):
 
 
 def evaluate_model_in_epoch(epoch, eval_task_name):
+    """
+    eval_task_name: without file type
+    """
     cache_path = f'{CACHE_DIR}epoch_{epoch}/'
     
     tokenizer = BertTokenizer.from_pretrained(cache_path)
@@ -165,10 +138,10 @@ def evaluate_model_in_epoch(epoch, eval_task_name):
     return evaluate(eval_task_name, model, tokenizer)
 
     
-
+# In[ ]
 def evaluate(eval_task_name, model, tokenizer):
     processor = BinaryClassificationProcessor()
-    eval_examples = processor.get_dev_examples(DATA_DIR, eval_task_name)
+    eval_examples = processor.get_dev_examples(DATA_DIR, f'{eval_task_name}.tsv')
     eval_examples_len = len(eval_examples)
     
     eval_features = convert_examples_to_features(eval_examples, 
@@ -224,7 +197,7 @@ def evaluate(eval_task_name, model, tokenizer):
             preds = np.append(preds, logits.detach().cpu().numpy(), axis=0)
             out_label_ids = np.append(out_label_ids, inputs['labels'].detach().cpu().numpy(), axis=0)
 
-    before_argmax_preds = preds ## delete this 
+    logits = preds ## delete this 
 
     eval_loss = eval_loss / nb_eval_steps
     if OUTPUT_MODE == "classification":
@@ -232,28 +205,31 @@ def evaluate(eval_task_name, model, tokenizer):
     elif OUTPUT_MODE == "regression":
         preds = np.squeeze(preds)
 
-    result = precision_recall_results(report_file_name, out_label_ids, preds) # report file name here
-    result["1-5 question acc"] = question_accuracy(before_argmax_preds, out_label_ids)
+    # result = precision_recall_results(report_file_name, out_label_ids, preds) # report file name here
+    # result["1-5 question acc"] = question_accuracy_old(before_argmax_preds, out_label_ids)
+    
+    
+    result = get_report(eval_task_name, logits)
     result['eval loss '] = round(eval_loss, 2)
-    
-    
     return result
 
 
-# In[ ]:
+
+def get_report(output_file_name, logits):
+    output_18 = write_logits_and_save_file(output_file_name, logits)
+    # add assert to ensure same shape
+    nested_logits_18 = nest_output_logits(output_18)
+
+    result = evaluate_one_entry_score(output_18)
+    result['question_acc'] = evaluate_question_score(output_18, nested_logits_18)
+    print(result)
+    return result 
 
 
 
 
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
-
+# get_report('output_test_18', before_argmax_preds)
+#%%
 
 
 
@@ -267,36 +243,30 @@ for epoch in range(epoch_nums):
     epoch += 1
     set_seed(42)
     # evaluation using saved model 
-    ## eval 2017s
-    results = evaluate_model_in_epoch(epoch, 'dev_17_combined_qs.tsv')
+    ## eval 2017
+    results = evaluate_model_in_epoch(epoch, 'test_17_75%')
     vis.plot_precision(results['precision'], epoch)
     vis.plot_recall(results['recall'], epoch)
-    vis.plot_accuracy(results['1-5 question acc'], epoch)
+    vis.plot_accuracy_old(results['old_question_acc'], epoch)
+    vis.plot_accuracy(results['question_acc'], epoch)
     
     ## eval 2018
-    results_2018 = evaluate_model_in_epoch(epoch, 'dev_18_combined_qs.tsv')
+    results_2018 = evaluate_model_in_epoch(epoch, 'test_18_75%')
     vis.plot_precision2(results_2018['precision'], epoch)
     vis.plot_recall2(results_2018['recall'], epoch)
-    vis.plot_accuracy2(results_2018['1-5 question acc'], epoch)
+    vis.plot_accuracy_old2(results_2018['old_question_acc'], epoch)
+    vis.plot_accuracy2(results['question_acc'], epoch)
         
 	## eval train_3000.tsv
-    results_train_3000 = evaluate_model_in_epoch(epoch, 'train_3000.tsv')
+    results_train_3000 = evaluate_model_in_epoch(epoch, 'train_3000_75%')
     vis.plot_precision3(results_train_3000['precision'], epoch)
     vis.plot_recall3(results_train_3000['recall'], epoch)
-    vis.plot_accuracy3(results_train_3000['1-5 question acc'], epoch)
+    vis.plot_accuracy_old3(results_train_3000['old_question_acc'], epoch)
+    vis.plot_accuracy3(results_train_3000['question_acc'], epoch)
         
 
 
 
 
-# In[ ]:
 
-
-
-
-
-# In[ ]:
-
-
-
-
+#%%

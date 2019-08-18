@@ -1,3 +1,4 @@
+#%%
 from datetime import datetime
 import visdom
 
@@ -14,14 +15,17 @@ class Visualizations:
 
         self.precision_epoch_win = None
         self.recall_epoch_win = None
+        self.accuracy_old_epoch_win = None
         self.accuracy_epoch_win = None
 
         self.precision_epoch_win2 = None
         self.recall_epoch_win2 = None
+        self.accuracy_old_epoch_win2 = None
         self.accuracy_epoch_win2 = None
 
         self.precision_epoch_win3 = None
         self.recall_epoch_win3 = None
+        self.accuracy_old_epoch_win3 = None
         self.accuracy_epoch_win3 = None
 
     def plot_loss(self, loss, step):
@@ -77,6 +81,18 @@ class Visualizations:
             )
         )
 
+    def plot_accuracy_old(self, accuracy, epoch):
+        self.accuracy_old_epoch_win = self.vis.line(
+            [accuracy],
+            [epoch],
+            win=self.accuracy_old_epoch_win,
+            update='append' if self.accuracy_old_epoch_win else None,
+            opts=dict(
+                xlabel='Epoch',
+                ylabel='Accuracy',
+                title='2017 Old Accuracy-Epoch',
+            )
+        )
     def plot_accuracy(self, accuracy, epoch):
         self.accuracy_epoch_win = self.vis.line(
             [accuracy],
@@ -86,9 +102,10 @@ class Visualizations:
             opts=dict(
                 xlabel='Epoch',
                 ylabel='Accuracy',
-                title='2017 Accuracy-Epoch',
+                title='2017 new Accuracy-Epoch',
             )
         )
+
 
     # 2018
 
@@ -118,6 +135,18 @@ class Visualizations:
             )
         )
 
+    def plot_accuracy_old2(self, accuracy, epoch):
+        self.accuracy_old_epoch_win2 = self.vis.line(
+            [accuracy],
+            [epoch],
+            win=self.accuracy_old_epoch_win2,
+            update='append' if self.accuracy_old_epoch_win2 else None,
+            opts=dict(
+                xlabel='Epoch',
+                ylabel='Accuracy',
+                title='2018 Old Accuracy-Epoch',
+            )
+        )
     def plot_accuracy2(self, accuracy, epoch):
         self.accuracy_epoch_win2 = self.vis.line(
             [accuracy],
@@ -127,7 +156,7 @@ class Visualizations:
             opts=dict(
                 xlabel='Epoch',
                 ylabel='Accuracy',
-                title='2018 Accuracy-Epoch',
+                title='2018 new Accuracy-Epoch',
             )
         )
 
@@ -159,6 +188,18 @@ class Visualizations:
             )
         )
 
+    def plot_accuracy_old3(self, accuracy, epoch):
+        self.accuracy_old_epoch_win3 = self.vis.line(
+            [accuracy],
+            [epoch],
+            win=self.accuracy_old_epoch_win3,
+            update='append' if self.accuracy_old_epoch_win3 else None,
+            opts=dict(
+                xlabel='Epoch',
+                ylabel='Accuracy',
+                title='Train 3000 Old Accuracy-Epoch',
+            )
+        )
     def plot_accuracy3(self, accuracy, epoch):
         self.accuracy_epoch_win3 = self.vis.line(
             [accuracy],
@@ -168,6 +209,6 @@ class Visualizations:
             opts=dict(
                 xlabel='Epoch',
                 ylabel='Accuracy',
-                title='Train_3000 Accuracy-Epoch',
+                title='Train 3000 new Accuracy-Epoch',
             )
         )

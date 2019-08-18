@@ -30,8 +30,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # In[ ]:
 
 
-visdom_env_name = 'nothing1' #combined_overlapped---need_update
-train_file = 'train_combined_overlapped.tsv'
+visdom_env_name = 'combined_overlapped_75%---need'
+train_file = 'train_3000_75%.tsv' # ! update
 data_dir = "data/combined_overlapped" # ! FIXME need to update testing data && update accuracy for evaluation result 
 
 
@@ -80,7 +80,7 @@ set_seed(42) # For reproductivity
 
 
 processor = BinaryClassificationProcessor()
-train_examples = processor.get_train_examples(data_dir, train_file)
+train_examples = processor.get_train_examples(data_dir, train_file)[:1000] # !!! change this
 
 
 label_list = processor.get_labels() # [0, 1] for binary classification
@@ -97,9 +97,6 @@ model = BertForSequenceClassification.from_pretrained(bert_model,
 tokenizer = BertTokenizer.from_pretrained('bert-base-chinese')
 model.to(device)
 
-
-
-# In[ ]:
 
 
 ## Training func
@@ -120,8 +117,9 @@ def convert_to_input_features_helper(input_examples, tokenizer, multiprocessing=
     else: # multiprocessing
         label_map = {label : i for i, label in enumerate(label_list)}
         input_multiprocessing = [(example, label_map, max_seq_length, tokenizer, output_mode) for example in input_examples]
+        print(f'Using {cpu_count()} processes to convert {len(input_examples)} examples!')
         with Pool(cpu_count()) as p:
-            return list(tqdm(p.map(convert_example_to_feature, input_multiprocessing)))
+            return list(p.map(convert_example_to_feature, tqdm(input_multiprocessing)))
 
 
 # In[ ]:
@@ -239,7 +237,7 @@ def train(train_task_name, model, tokenizer):
             if gradient_accumulation_steps > 1:
                 loss = loss / gradient_accumulation_steps
 
-            print("\r%f" % loss, end='') # delete this
+            # print("\r%f" % loss, end='') # delete this
  
             loss_log.append(loss) # delete this
     
@@ -276,24 +274,26 @@ def train(train_task_name, model, tokenizer):
         save_model_in_epoch(epoch)
 
         # evaluation using saved model 
-        ## eval 2017
-        results = evaluate_model_in_epoch(epoch, 'dev_17_combined_qs_title.tsv')
+        ## eval 2017s
+        results = evaluate_model_in_epoch(epoch, 'test_17_75%')
         vis.plot_precision(results['precision'], epoch)
         vis.plot_recall(results['recall'], epoch)
-        vis.plot_accuracy(results['1-5 question acc'], epoch)
+        vis.plot_accuracy_old(results['old_question_acc'], epoch)
+        vis.plot_accuracy(results['question_acc'], epoch)
         
         ## eval 2018
-        results_2018 = evaluate_model_in_epoch(epoch, 'dev_18_combined_qs_title.tsv')
+        results_2018 = evaluate_model_in_epoch(epoch, 'test_18_75%')
         vis.plot_precision2(results_2018['precision'], epoch)
         vis.plot_recall2(results_2018['recall'], epoch)
-        vis.plot_accuracy2(results_2018['1-5 question acc'], epoch)
-        
-	## eval train_3000.tsv
-        results_train_3000 = evaluate_model_in_epoch(epoch, 'train_3000_combined_qs_title.tsv')
+        vis.plot_accuracy_old2(results_2018['old_question_acc'], epoch)
+        vis.plot_accuracy2(results['question_acc'], epoch)
+            
+        ## eval train_3000.tsv
+        results_train_3000 = evaluate_model_in_epoch(epoch, 'train_3000_75%')
         vis.plot_precision3(results_train_3000['precision'], epoch)
         vis.plot_recall3(results_train_3000['recall'], epoch)
-        vis.plot_accuracy3(results_train_3000['1-5 question acc'], epoch)
-        
+        vis.plot_accuracy_old3(results_train_3000['old_question_acc'], epoch)
+        vis.plot_accuracy3(results_train_3000['question_acc'], epoch)
         
         if max_steps > 0 and global_step > max_steps:
             train_iterator.close()
@@ -335,8 +335,11 @@ def save_model(dir_path):
 
 
 def evaluate_model_in_epoch(epoch, eval_task_name):
+    """
+    eval_task_name: without file type
+    """
     cache_path = f'{cache_dir}epoch_{epoch}/'
-    # Load a trained model and vocabulary that you have fine-tuned
+    
     tokenizer = BertTokenizer.from_pretrained(cache_path)
     model = BertForSequenceClassification.from_pretrained(cache_path, 
                                                       cache_dir=cache_path, 
@@ -349,7 +352,7 @@ def evaluate_model_in_epoch(epoch, eval_task_name):
 
 def evaluate(eval_task_name, model, tokenizer):
     processor = BinaryClassificationProcessor()
-    eval_examples = processor.get_dev_examples(data_dir, eval_task_name)
+    eval_examples = processor.get_dev_examples(data_dir, f'{eval_task_name}.tsv')
     eval_examples_len = len(eval_examples)
     
 
@@ -403,7 +406,7 @@ def evaluate(eval_task_name, model, tokenizer):
             preds = np.append(preds, logits.detach().cpu().numpy(), axis=0)
             out_label_ids = np.append(out_label_ids, inputs['labels'].detach().cpu().numpy(), axis=0)
 
-    before_argmax_preds = preds ## delete this 
+    logits = preds ## delete this 
 
     eval_loss = eval_loss / nb_eval_steps
     if output_mode == "classification":
@@ -411,15 +414,22 @@ def evaluate(eval_task_name, model, tokenizer):
     elif output_mode == "regression":
         preds = np.squeeze(preds)
 
-    result = precision_recall_results(report_file_name, out_label_ids, preds) # report file name here
-    result["1-5 question acc"] = question_accuracy(before_argmax_preds, out_label_ids)
+    result = get_report(eval_task_name, logits)
     result['eval loss '] = round(eval_loss, 2)
     
     
     return result
 
 
+def get_report(output_file_name, logits):
+    output_18 = write_logits_and_save_file(output_file_name, logits)
+    # add assert to ensure same shape
+    nested_logits_18 = nest_output_logits(output_18)
 
+    result = evaluate_one_entry_score(output_18)
+    result['question_acc'] = evaluate_question_score(output_18, nested_logits_18)
+    print(result)
+    return result 
 
 
 
