@@ -3,7 +3,7 @@
 
 
 # In[ ]:
-
+from config import *
 
 import torch
 from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler,
@@ -11,55 +11,27 @@ from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler,
 from torch.nn import CrossEntropyLoss, MSELoss
 from tqdm import tqdm, trange
 import os
-from pytorch_transformers import BertTokenizer, BertModel, BertForMaskedLM, BertForSequenceClassification
+from pytorch_transformers import BertTokenizer, BertModel, BertForMaskedLM, BertForSequenceClassification, BertForMultipleChoice
 from pytorch_transformers.optimization import AdamW, WarmupLinearSchedule
 from multiprocessing import Pool, cpu_count
 
 from utils import *
-from reports_tools import * # accuracy evaluation methods
+# from reports_tools import * # accuracy evaluation methods
 from visualization import * # for live plotting
-
 from convert_example_to_features import *
+
 
 import logging
 logging.basicConfig(level=logging.INFO)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-
-# In[ ]:
-
-
-visdom_env_name = 'combined_overlapped_75%---need'
-train_file = 'train_3000_75%.tsv' # ! update
-data_dir = "data/combined_overlapped" # ! FIXME need to update testing data && update accuracy for evaluation result 
+print('######################## PARAMS ##########################') 
+print(stats) 
 
 
-
-use_multiprocessing = True
-bert_model = 'bert-base-chinese'
-
-output_dir = 'outputs/'
-report_dir = 'reports/'
-cache_dir = 'cache/'
-max_steps = -1
-max_seq_length = 512
-per_gpu_train_batch_size = 6 # change this to 6 if max_seq_length is 512
-per_gpu_eval_size = 8
-learning_rate = 2e-5
-num_train_epochs = 15
-random_seed = 42
-
-gradient_accumulation_steps = 1
-warmup_proportion = 0.1
-output_mode = 'classification'
-# classification
-CONFIG_NAME = 'config.json'
-WEIGHTS_NAME = 'pytorch_model.bin'
 
 # file name has been modified
-report_file_name = f'no_weight_decay_lr={learning_rate}, epoch={num_train_epochs}, train_file={train_file}, max_seq_length={max_seq_length}, batch_size={per_gpu_train_batch_size}'
-print(report_file_name)
 
 # In[ ]:
 # ensure the following statements is evaluated before any other process
@@ -78,23 +50,23 @@ set_seed(42) # For reproductivity
 
 # In[ ]:
 
-
 processor = BinaryClassificationProcessor()
-train_examples = processor.get_train_examples(data_dir, train_file)[:1000] # !!! change this
 
+train_examples = processor.get_train_examples(data_dir, train_file)
+label_list = processor.get_labels() 
 
-label_list = processor.get_labels() # [0, 1] for binary classification
-num_labels = len(label_list)
+if not use_fine_tuned_model:
+    print('using default model')
+    tokenizer = BertTokenizer.from_pretrained(bert_model)
+    model = BertForSequenceClassification.from_pretrained(bert_model,
+	cache_dir=cache_dir,
+        num_labels=1
+        )
+else:
+    print('!!! using home brewed model')
+    tokenizer = BertTokenizer.from_pretrained(cache_dir)
+    model = BertForSequenceClassification.from_pretrained(cache_dir, num_labels=1)
 
-
-# In[ ]:
-
-
-model = BertForSequenceClassification.from_pretrained(bert_model, 
-                                                      cache_dir=cache_dir, 
-                                                      num_labels=num_labels)
-# Load pre-trained model tokenizer (vocabulary)
-tokenizer = BertTokenizer.from_pretrained('bert-base-chinese')
 model.to(device)
 
 
@@ -102,11 +74,15 @@ model.to(device)
 ## Training func
 # In[ ]
 print(f'{torch.cuda.device_count()} cuda device(s) found')
-n_gpus = torch.cuda.device_count()
-# n_gpus = 1
+if use_multi_gpu:
+    n_gpus = torch.cuda.device_count()  # !!! set to one
+else:
+    n_gpus = 1
+print(f'use_multi_gpu: {use_multi_gpu}; {n_gpus} cuda device(s) is going to be used in training')
 
-# In[ ]:
-# tokenizer is needed here
+
+
+#%%
 def convert_to_input_features_helper(input_examples, tokenizer, multiprocessing=False):
     if not multiprocessing:
         return convert_examples_to_features(input_examples,
@@ -122,8 +98,6 @@ def convert_to_input_features_helper(input_examples, tokenizer, multiprocessing=
             return list(p.map(convert_example_to_feature, tqdm(input_multiprocessing)))
 
 
-# In[ ]:
-loss_log = [] 
 
 def train(train_task_name, model, tokenizer):
     set_seed(42) # for reproductibility 
@@ -135,15 +109,13 @@ def train(train_task_name, model, tokenizer):
     all_input_mask = torch.tensor([f.input_mask for f in train_features], dtype=torch.long)
     all_segment_ids = torch.tensor([f.segment_ids for f in train_features], dtype=torch.long)
     
-    if output_mode == "classification":
-        all_label_ids = torch.tensor([f.label_id for f in train_features], dtype=torch.long)
-    
-    train_data = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
+    all_label_ids = torch.tensor([f.label_id for f in train_features], dtype=torch.long) # !!!! no minus 1
+    train_dataset = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
 
     # total batch size
     train_batch_size = per_gpu_train_batch_size*max(1, n_gpus)
-    train_sampler = RandomSampler(train_data)
-    train_dataloader = DataLoader(train_data, sampler=train_sampler, batch_size=train_batch_size)
+    train_sampler = SequentialSampler(train_dataset) # was random sampler
+    train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=train_batch_size)
 
     if max_steps > 0:
         t_total = max_steps
@@ -181,10 +153,7 @@ def train(train_task_name, model, tokenizer):
 
     
     # visualization
-    vis = Visualizations(visdom_env_name)
-    loss_step_values = []
-    loss_epoch_values = []
-        
+
     # train
     max_grad_norm = 1
 
@@ -201,106 +170,51 @@ def train(train_task_name, model, tokenizer):
         for step, batch in enumerate(epoch_iterator):
             model.train()
             batch = tuple(t.to(device) for t in batch)
+
             inputs = {'input_ids': batch[0],
                       'attention_mask': batch[1],
                       'token_type_ids': batch[2],
                       'labels': None}
-            label_ids = batch[3]
             outputs = model(**inputs) # unpack dict
             logits = outputs[0] # model outputs are in tuple
-            
-            
-            if global_step < 1:
-                print(logits)
-                print(label_ids)
-            ############# BCEWithLogitsLoss #########
-#             loss_fct = torch.nn.BCEWithLogitsLoss()
-#             label_ids= torch.nn.functional.one_hot(label_ids, 2).float() # one hot encoding 
-#             # change dtype to float to match cuda backend type
-#             loss = loss_fct(logits.view(-1, num_labels), label_ids.view(-1, num_labels))
-            #########################################
-            
-            
-            ############# CrossEntropy ##############
+            reshaped_logits = logits.view(-1, 5) # 5: num of choices 
+            _, labels = torch.max(batch[3].view(-1, 5), 1)
             loss_fct = CrossEntropyLoss()
-            loss = loss_fct(logits.view(-1, num_labels), label_ids.view(-1))
-            #########################################
+            loss = loss_fct(reshaped_logits, labels)
 
-            if n_gpus > 1:
-                if global_step < 1:
-                    print('before average')
-                    print(loss)
-                loss = loss.mean() # to average on multi-gpu parallel training
-                if global_step < 1:
-                    print('after average')
-                    print(loss)
+
             if gradient_accumulation_steps > 1:
                 loss = loss / gradient_accumulation_steps
 
             # print("\r%f" % loss, end='') # delete this
  
-            loss_log.append(loss) # delete this
-    
-    
-            # visualization
-            loss_step_values.append(loss.item())
-            loss_epoch_values.append(loss.item())
-            
-            if global_step % 100 == 0:
-                vis.plot_loss(np.mean(loss_step_values), global_step)
-                loss_step_values.clear()
 
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
 
             tr_loss += loss.item()
             if (step + 1) % gradient_accumulation_steps == 0:
-                scheduler.step()
                 optimizer.step()
+                scheduler.step() # call optimizer before scheduler 
                 model.zero_grad()
                 global_step += 1
             if max_steps > 0 and global_step > max_steps:
                 epoch_iterator.close()
                 break
                 
-      
-        # loss-epoch visualization
-        epoch += 1
-        vis.plot_epoch(np.mean(loss_epoch_values), epoch) 
-        loss_epoch_values.clear()
-        
-        
+    
+        epoch += 1 
         # save model at each epoch
         save_model_in_epoch(epoch)
 
-        # evaluation using saved model 
-        ## eval 2017s
-        results = evaluate_model_in_epoch(epoch, 'test_17_75%')
-        vis.plot_precision(results['precision'], epoch)
-        vis.plot_recall(results['recall'], epoch)
-        vis.plot_accuracy_old(results['old_question_acc'], epoch)
-        vis.plot_accuracy(results['question_acc'], epoch)
-        
-        ## eval 2018
-        results_2018 = evaluate_model_in_epoch(epoch, 'test_18_75%')
-        vis.plot_precision2(results_2018['precision'], epoch)
-        vis.plot_recall2(results_2018['recall'], epoch)
-        vis.plot_accuracy_old2(results_2018['old_question_acc'], epoch)
-        vis.plot_accuracy2(results['question_acc'], epoch)
-            
-        ## eval train_3000.tsv
-        results_train_3000 = evaluate_model_in_epoch(epoch, 'train_3000_75%')
-        vis.plot_precision3(results_train_3000['precision'], epoch)
-        vis.plot_recall3(results_train_3000['recall'], epoch)
-        vis.plot_accuracy_old3(results_train_3000['old_question_acc'], epoch)
-        vis.plot_accuracy3(results_train_3000['question_acc'], epoch)
-        
+        # evaluation using saved model
+
         if max_steps > 0 and global_step > max_steps:
             train_iterator.close()
             break
 
 
-# ## visualization
+
 
 # In[ ]:
 
@@ -334,115 +248,9 @@ def save_model(dir_path):
 # In[ ]:
 
 
-def evaluate_model_in_epoch(epoch, eval_task_name):
-    """
-    eval_task_name: without file type
-    """
-    cache_path = f'{cache_dir}epoch_{epoch}/'
-    
-    tokenizer = BertTokenizer.from_pretrained(cache_path)
-    model = BertForSequenceClassification.from_pretrained(cache_path, 
-                                                      cache_dir=cache_path, 
-                                                      num_labels=len(label_list))
-    model.to(device)
-    
-    return evaluate(eval_task_name, model, tokenizer)
-
-    
-
-def evaluate(eval_task_name, model, tokenizer):
-    processor = BinaryClassificationProcessor()
-    eval_examples = processor.get_dev_examples(data_dir, f'{eval_task_name}.tsv')
-    eval_examples_len = len(eval_examples)
-    
-
-    eval_features = convert_to_input_features_helper(eval_examples, tokenizer, use_multiprocessing)
-
-    all_input_ids = torch.tensor([f.input_ids for f in eval_features], dtype=torch.long)
-    all_input_mask = torch.tensor([f.input_mask for f in eval_features], dtype=torch.long)
-    all_segment_ids = torch.tensor([f.segment_ids for f in eval_features], dtype=torch.long)
-    if output_mode == "classification":
-        all_label_ids = torch.tensor([f.label_id for f in eval_features], dtype=torch.long)
-
-
-    # FIXME: is there a need to use multi gpu here
-    # if n_gpus > 1:
-    #     model = torch.nn.DataParallel(model)
-    # let's just use one for now
-    eval_batch_size = per_gpu_eval_size
-
-    eval_dataset = TensorDataset(all_input_ids, all_input_mask, all_segment_ids, all_label_ids)
-    eval_sampler = SequentialSampler(eval_dataset)
-    eval_dataloader = DataLoader(eval_dataset, sampler=eval_sampler, batch_size=eval_batch_size)
-
-
-    logger.info("***** Running evaluation *****")
-    logger.info("  Num examples = %d", len(eval_dataset))
-    logger.info("  Total batch size = %d", eval_batch_size)
-    
-    
-    eval_loss = 0.0
-    nb_eval_steps = 0
-    preds = None
-    out_label_ids = None
-    for batch in tqdm(eval_dataloader, desc="Evaluating"):
-        model.eval()
-        batch = tuple(t.to(device) for t in batch)
-
-        with torch.no_grad():
-            inputs = {'input_ids':      batch[0],
-                      'attention_mask': batch[1],
-                      'token_type_ids': batch[2], 
-                      'labels':         batch[3]}
-            outputs = model(**inputs)
-            tmp_eval_loss, logits = outputs[:2]
-
-            eval_loss += tmp_eval_loss.mean().item()
-        nb_eval_steps += 1
-        if preds is None:
-            preds = logits.detach().cpu().numpy()
-            out_label_ids = inputs['labels'].detach().cpu().numpy()
-        else:
-            preds = np.append(preds, logits.detach().cpu().numpy(), axis=0)
-            out_label_ids = np.append(out_label_ids, inputs['labels'].detach().cpu().numpy(), axis=0)
-
-    logits = preds ## delete this 
-
-    eval_loss = eval_loss / nb_eval_steps
-    if output_mode == "classification":
-        preds = np.argmax(preds, axis=1)
-    elif output_mode == "regression":
-        preds = np.squeeze(preds)
-
-    result = get_report(eval_task_name, logits)
-    result['eval loss '] = round(eval_loss, 2)
-    
-    
-    return result
-
-
-def get_report(output_file_name, logits):
-    output_18 = write_logits_and_save_file(output_file_name, logits)
-    # add assert to ensure same shape
-    nested_logits_18 = nest_output_logits(output_18)
-
-    result = evaluate_one_entry_score(output_18)
-    result['question_acc'] = evaluate_question_score(output_18, nested_logits_18)
-    print(result)
-    return result 
-
-
-
-
-# In[ ]:
-
-
 train(train_file, model, tokenizer)
 
 
-# In[ ]:
 
 
-
-
-
+#%%

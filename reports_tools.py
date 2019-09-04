@@ -2,7 +2,50 @@
 import numpy as np
 import pandas as pd
 
-# first method 
+
+
+### FIRST method: avg
+def first_method_max(nested_logits, qs_pair_label):
+    """
+    return: accuracy
+    """
+    predicted_label = []
+    for q, qq in enumerate(nested_logits):
+        max_diff = -2**16 # correctness
+        label = -1
+        for c, cc in enumerate(qq):
+            for s in cc:
+                cur_diff = s[1] - s[0]
+                if cur_diff > max_diff:
+                    max_diff = cur_diff
+                    label = c + 1
+
+        predicted_label.append(label)
+        # print('label is:', label)
+    print(predicted_label)
+     # find true labels for questions
+    def accuracy(labels, preds):
+        length = len(labels)
+        correct_num = 0
+        for i in range(length):
+            if labels[i] == preds[i]:
+                correct_num += 1
+        return correct_num / length
+
+    labels = []
+    question_number = int(len(qs_pair_label) / 5)
+    for question in range(question_number):
+        for choice in range(5):
+            choice_index = 5*question + choice
+            if qs_pair_label[choice_index] == 1:
+                labels.append(choice_index % 5 + 1)
+                break
+    return accuracy(labels, predicted_label)
+   
+
+
+
+### SECOND method: avg 
 def calc_avg_logits(cc):
     cc_np = np.array(cc)
     #print('hi')
@@ -12,7 +55,7 @@ def calc_avg_logits(cc):
     # print(avg_logits)
     return avg_logits
 
-def first_method_avg(nested_logits):
+def second_method_avg(nested_logits):
     """
     nested_logits: list, nested logits grouped by question and choice level 
     Average logits for all snippet pieces in a question-choice pair 
@@ -27,6 +70,161 @@ def first_method_avg(nested_logits):
         question_level_logits.extend(choice_level_logits)
     return question_level_logits
 
+
+
+
+
+
+def snippet_avg_helper_correct_only(qcs_level_diff, only_correct=True): 
+    """
+    qcs_level_diff: difference between the right logit and left logit for each choice snippet. This mesures 
+    the correctness of the question_choice_snippet. 
+    
+    correctness <= 0, wrong 
+    correctness > 0, correct 
+    
+    return: label in [1,5] for a question 
+    """
+    qc_level_avg = []
+    for c, cc in enumerate(qcs_level_diff):
+        correct_pair_nums = len([s for s in cc if s > 0])
+        wrong_pair_nums = len([s for s in cc if s <= 0])
+        
+        correct_pair_avg = 0 if correct_pair_nums == 0 else sum([s for s in cc if s > 0]) / correct_pair_nums
+        wrong_pair_avg = 0 if wrong_pair_nums == 0 else sum([s for s in cc if s <= 0]) / wrong_pair_nums
+        print(correct_pair_avg, wrong_pair_avg)
+        if only_correct:
+            correct_avg = correct_pair_avg if correct_pair_nums != 0 else wrong_pair_avg
+        # Method FOUR: both correct and wrong 
+        # correct_and_wrong_avg = (correct_pair_avg + wrong_pair_avg) / 2
+        qc_level_avg.append(correct_avg)
+    # print('Avg for a5 choices in a question', qc_level_avg)
+    # print(qc_level_avg.index(max(qc_level_avg)))
+    return qc_level_avg.index(max(qc_level_avg)) + 1
+
+### THIRD method: vote only correct
+def third_method_vote_only_correct(nested_logits, qs_pair_label):
+    q_labels_preds = []
+    for q in nested_logits:
+        # print('question:::----', q)
+        choice_level = []
+        for c in q:
+            print('choice----', c)
+            snippet_level = []
+            for s in c:
+                # print('snippet--', s)
+                diff = s[1] - s[0]
+                # print(diff)
+                snippet_level.append(diff)
+            #print(snippet_level)
+            # print('')
+            choice_level.append(snippet_level)
+        
+
+        q_label = snippet_avg_helper_correct_only(choice_level)
+        q_labels_preds.append(q_label)
+
+    print('predicted labels')
+    print(q_labels_preds)
+
+
+         # find true labels for questions
+    def accuracy(labels, preds):
+        length = len(labels)
+        correct_num = 0
+        for i in range(length):
+            if labels[i] == preds[i]:
+                correct_num += 1
+        return correct_num / length
+
+    labels = []
+    question_number = int(len(qs_pair_label) / 5)
+    for question in range(question_number):
+        for choice in range(5):
+            choice_index = 5*question + choice
+            if qs_pair_label[choice_index] == 1:
+                labels.append(choice_index % 5 + 1)
+                break
+    return accuracy(labels, q_labels_preds)
+    
+
+
+
+
+
+def snippet_avg_helper(qcs_level_diff):
+    """
+    qcs_level_diff: difference between the right logit and left logit for each choice snippet. This mesures 
+    the correctness of the question_choice_snippet. 
+    
+    correctness <= 0, wrong 
+    correctness > 0, correct 
+    
+    return: label in [1,5] for a question 
+    """
+    qc_level_avg = []
+    for c, cc in enumerate(qcs_level_diff):
+        correct_pair_nums = len([s for s in cc if s > 0])
+        wrong_pair_nums = len([s for s in cc if s <= 0])
+        
+        correct_pair_avg = 0 if correct_pair_nums == 0 else sum([s for s in cc if s > 0]) / correct_pair_nums
+        wrong_pair_avg = 0 if wrong_pair_nums == 0 else sum([s for s in cc if s <= 0]) / wrong_pair_nums
+        print(correct_pair_avg, wrong_pair_avg)
+        
+        # Method FOUR: both correct and wrong 
+        correct_and_wrong_avg = (correct_pair_avg + wrong_pair_avg) / 2
+        print(correct_and_wrong_avg)
+        qc_level_avg.append(correct_and_wrong_avg)
+    print('Avg for a5 choices in a question', qc_level_avg)
+    print(qc_level_avg.index(max(qc_level_avg)))
+    return qc_level_avg.index(max(qc_level_avg)) + 1
+
+
+### FOURTH method: vote correct wrong 
+def fourth_method_vote_correct_wrong(nested_logits, qs_pair_label):
+    q_labels_preds = []
+    for q in nested_logits:
+        # print('question:::----', q)
+        choice_level = []
+        for c in q:
+            print('choice----', c)
+            snippet_level = []
+            for s in c:
+                # print('snippet--', s)
+                diff = s[1] - s[0]
+                # print(diff)
+                snippet_level.append(diff)
+            #print(snippet_level)
+            # print('')
+            choice_level.append(snippet_level)
+        
+
+        q_label = snippet_avg_helper(choice_level)
+        q_labels_preds.append(q_label)
+
+    print('predicted labels')
+    print(q_labels_preds)
+
+
+         # find true labels for questions
+    def accuracy(labels, preds):
+        length = len(labels)
+        correct_num = 0
+        for i in range(length):
+            if labels[i] == preds[i]:
+                correct_num += 1
+        return correct_num / length
+
+    labels = []
+    question_number = int(len(qs_pair_label) / 5)
+    for question in range(question_number):
+        for choice in range(5):
+            choice_index = 5*question + choice
+            if qs_pair_label[choice_index] == 1:
+                labels.append(choice_index % 5 + 1)
+                break
+    return accuracy(labels, q_labels_preds)
+    
 
 
 
@@ -106,7 +304,7 @@ def precision_recall_score(y_true, y_pred):
         if true == y_pred[i]:
             if true == 1:
                 tp += 1
-            else: # == 0first_method_avg
+            else: # == 0second_method_avg
                 tn += 1
         else:
             if true == 1:
@@ -296,20 +494,36 @@ def evaluate_one_entry_score(output_df):
     return result
 
 
-def evaluate_question_score(output_df, nested_logits):
-    # first method - question level logits
+def evaluate_question_score(output_df, nested_logits, method_number):
     """
     output_df: dataframe, output with logits 
     nested_logits: list
 
+    method_number: 
+        1 - first_method_max
+        2 - second_method_avg
+        3 - third_method_vote_only_correct
+        4 - fourth_method_cote_correct_wrong
+
     return: question level accuracy 
     """
-    question_level_logits = first_method_avg(nested_logits)
-
-    # question level true labels
     unique_pairs = np.unique(output_df[['q_index', 'c_index', 'label']].values, axis=0)
-    question_level_label = [label for _, _, label in unique_pairs]
-    return question_accuracy(question_level_label, question_level_logits)
+    # question level true labels [0, 1]
+    labels_true = [label for _, _, label in unique_pairs]
+
+    assert method_number in [1,2,3,4], 'Method number does not exists'
+
+    if method_number == 1:
+        return first_method_max(nested_logits, labels_true)
+    elif method_number == 2:
+        question_level_logits = second_method_avg(nested_logits)
+        return question_accuracy(labels_true, question_level_logits)
+    elif method_number == 3:
+        return third_method_vote_only_correct(nested_logits, labels_true)
+    else:
+        return fourth_method_vote_correct_wrong(nested_logits, labels_true)
+    
+    
 
 
 

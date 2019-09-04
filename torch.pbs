@@ -1,0 +1,14 @@
+#!/bin/bash
+
+#SBATCH -J torch -p Q5 -n 14 --gres=gpu:v100:1
+
+cd $SLURM_SUBMIT_DIR
+source /csai01/soft/anaconda3/anaconda3.sh
+conda activate tensorflow
+
+
+date
+
+python bert.py && python eval.py
+
+date

@@ -1,17 +1,22 @@
-/data
+# exclude everything
+/data/*
+# but commit this folder 
+!/data/.gitkeep
 
+
+/cache/*
+!/cache/.gitkeep
+
+/outputs/*
+!/outputs/.gitkeep
+
+/outputs/*
+!/outputs/.gitkeep
+
+
+
+
+# others
 /.ipynb_checkpoints
-
 /__pycache__
-
-/cache
-
-/reports
-
-/outputs
-
 /.DS_Store
-
-
-# preprocessing files
-/preprocessing.ipynb
