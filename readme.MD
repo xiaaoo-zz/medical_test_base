@@ -8,14 +8,22 @@
 - pytorch_model.bin  
 - vocab.txt
 
-### Step 2: set `use_fine_tuned_model` to `True` in [config.py](./config.py#L10)
+### Step 2: set use_fine_tuned_model to True in [config.py](./config.py#L10)
 
 ```py
 # in config.py
 use_fine_tuned_model = True
 ```
 
-### Step 3: train and evaluate
+### Step 3: copy data to [data](./data/)
+
+```bash
+# on local machine
+cd ~/Documents/_data/trunc/
+scp -r lvl_5_3/ [user_name]@xxx.xxx.xxx.xxx:/csai01/[user_name]
+```
+
+### Step 4: train and evaluate
 
 Using hpc: `sbatch torch.pbs`
 
@@ -27,14 +35,52 @@ The accuracy results will be saved into [outputs](./outputs), including two acc-
 
 For evaluating model, we **only** care year_17 results, the higher the betters.
 
-## WARNING: Rerun the procedure in the same file
+## WARNING: About rerunning the procedure in the same folder
 
-Before reruning and testing:
+Before rerunning and testing:
 
-1. Delete saved models (not the output models saved in Step 1):
+1. Delete saved models (not the output models saved in Step 1)
 
     The above procedure will run for 3 epochs and save each model in [cache](./cache/) as *epoch_i* directories. So
 
 2. (Delete) evaluation results
 
     Remove `eval_results.txt` in [outputs](./outputs) to keep its info only relavant to a specific procedure. New results will append to the old ones from previous evaluation, which may not be the desired behavior.
+
+## Baselines
+
+> Results are rounded **down** to 4 decimal places.
+
+---
+
+Fine tuned model baseline
+
+| File/Epoch    | 1        | 2      | 3       |
+| ------------- |:--------:| :-----:| :---:   |
+| test 2017     | 0.3916   | 0.4050 | 0.3966  |
+| test 2018     | 0.5826   | 0.7362 | 0.8230  |
+
+```py
+param_stats = snippet_type=lvl_5_3, use_multi_gpu=False, visdom_name=lvl_5_3, use_fine_tuned_model=True,  total_epochs=3, train_file=test_18.tsv, max_seq_length=512, per_gpu_train_batch_size=10, per_gpu_eval_batch_size=5
+```
+
+---
+
+Default model baseline
+
+| File/Epoch    | 1        | 2      | 3       |
+| ------------- |:--------:| :-----:| :---:   |
+| test 2017     | 0.4050   | 0.4333 | 0.4200  |
+| test 2018     | 0.5893   | 0.6844 | 0.7896  |
+
+```py
+param_stats = snippet_type=lvl_5_3, use_multi_gpu=False, visdom_name=lvl_5_3, use_fine_tuned_model=False,  total_epochs=3, train_file=test_18.tsv, max_seq_length=512, per_gpu_train_batch_size=10, per_gpu_eval_batch_size=5
+```
+
+---
+
+A few important params choosed
+
+- snippet type: lvl_5_3
+- per_gpu_train_batch_size: 10
+- total_epochs: 3
