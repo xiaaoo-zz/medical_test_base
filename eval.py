@@ -134,7 +134,9 @@ def evaluate(eval_task_name, model, tokenizer):
         'file': eval_task_name,
         'eval_loss': eval_loss,
         'eval_accuracy': eval_accuracy,
-        'param_stats': stats
+        'param_stats': stats,
+        'preds': preds_list,
+        'labels': labels_list
         }
     return results, preds, out_label_ids
     
@@ -158,6 +160,7 @@ def evaluate_iterator(test_file_list, epoch_list):
 
             # write acc to a txt file 
             write_results(results)
+            # write_results_to_parent_folder(results)
 
             # draw accuracy plot
             accuracy_plot_helper(results['eval_accuracy'], epoch, file)
@@ -182,9 +185,18 @@ def write_results(results):
             writer.write("%s = %s\n" % (key, str(results[key])))
         writer.write('\n\n')
 
+def write_results_to_parent_folder(results):
+    output_eval_file = os.path.join(parent_output_dir, f"{train_type}.txt")
+    with open(output_eval_file, "a") as writer:
+        writer.write("%s = %s\n" % ('file', str(results['file'])))
+        writer.write("%s = %s\n" % ('eval_loss', str(results['eval_loss'])))        
+        writer.write("%s = %s\n" % ('eval_accuracy', str(results['eval_accuracy'])))
+        writer.write("%s = %s\n" % ('preds', str(results['preds'])))
+        writer.write("%s = %s\n" % ('labels', str(results['labels'])))
+        writer.write('\n\n')
 
-# ## visualization
-#%%
+
+# visualization
 def visualize_helper(acc, epoch, file):
     if '17' in file:
         vis.plot_accuracy1(acc, epoch)
@@ -201,17 +213,15 @@ def accuracy_plot_helper(acc, epoch, file):
     if '3000' in file:
         acc_3000.append(acc)
 #%%
-test_files = ['test_17', 'test_18']
-epochs = [1, 2, 3]
+
 acc_17 = []
 acc_18 = []
 acc_3000 = []
 
-#%%
-evaluate_iterator(test_files, epochs)
+evaluate_iterator(eval_files, eval_epochs) # set in config.py
 # plot and save acc_epoch line figure
-acc_plot(acc_17, epochs, '17')
-acc_plot(acc_18, epochs, '18')
+
+acc_plot(acc_17, eval_epochs, '17')
+acc_plot(acc_18, eval_epochs, '18')
 #acc_plot(acc_3000, epochs, '3000')
 
-#%%

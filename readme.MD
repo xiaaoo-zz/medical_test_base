@@ -7,20 +7,26 @@
 - config.json
 - pytorch_model.bin  
 - vocab.txt
+- special_tokens_map.json
+- added_tokens.json
 
-### Step 2: set use_fine_tuned_model to True in [config.py](./config.py#L10)
+### Step 2: copy data to [data](./data/)
+
+```bash
+# for lvl_5_3 dataset
+# change the folder name *mt_base* to whatever relevant
+scp -r lvl_5_3/ [user_name]@xxx.xxx.xxx.xxx:/csai01/[user_name]/[mt_base]
+```
+
+### Step 3 modify [config](./config.py#L10-L12) file
 
 ```py
 # in config.py
+# set this to true
 use_fine_tuned_model = True
-```
 
-### Step 3: copy data to [data](./data/)
-
-```bash
-# on local machine
-cd ~/Documents/_data/trunc/
-scp -r lvl_5_3/ [user_name]@xxx.xxx.xxx.xxx:/csai01/[user_name]
+# change this to the correspounding dataset dir name you are using (e.g. lvl_5, lvl_4_short_tf)
+snippet_type = 'lvl_5_3'
 ```
 
 ### Step 4: train and evaluate
@@ -33,7 +39,7 @@ Using local machine: `bash script.sh`
 
 The accuracy results will be saved into [outputs](./outputs), including two acc-epoch graphs for year_17 and year_18 tests and one detailed acc text file.
 
-For evaluating model, we **only** care year_17 results, the higher the betters.
+For evaluating model, we **only** care year_17 results, the higher the better.
 
 ## WARNING: About rerunning the procedure in the same folder
 
@@ -53,34 +59,36 @@ Before rerunning and testing:
 
 ---
 
+### choice_correct + lvl_4_short_tf
+
 Fine tuned model baseline
 
 | File/Epoch    | 1        | 2      | 3       |
 | ------------- |:--------:| :-----:| :---:   |
-| test 2017     | 0.3916   | 0.4050 | 0.3966  |
-| test 2018     | 0.5826   | 0.7362 | 0.8230  |
+| test 2017     | 0.3000   | 0.3216 | **0.3433**  |
+| test 2018     | 0.4858   | 0.6310 | 0.6928  |
 
 ```py
-param_stats = snippet_type=lvl_5_3, use_multi_gpu=False, visdom_name=lvl_5_3, use_fine_tuned_model=True,  total_epochs=3, train_file=test_18.tsv, max_seq_length=512, per_gpu_train_batch_size=10, per_gpu_eval_batch_size=5
+param_stats = train_type=choice_correct, snippet_type=lvl_4_short_tf, use_multi_gpu=False, visdom_name=lvl_4_short_tf, use_fine_tuned_model=False,  total_epochs=3, train_file=test_18_choice_correct.tsv, max_seq_length=512, per_gpu_train_batch_size=10, per_gpu_eval_batch_size=5
 ```
 
 ---
 
-Default model baseline
+### choice_correct + lvl_5
 
 | File/Epoch    | 1        | 2      | 3       |
 | ------------- |:--------:| :-----:| :---:   |
-| test 2017     | 0.4050   | 0.4333 | 0.4200  |
-| test 2018     | 0.5893   | 0.6844 | 0.7896  |
+| test 2017     | 0.3216   | 0.3116 | **0.3233**  |
+| test 2018     | 0.4090   | 0.5225 | 0.5709  |
 
 ```py
-param_stats = snippet_type=lvl_5_3, use_multi_gpu=False, visdom_name=lvl_5_3, use_fine_tuned_model=False,  total_epochs=3, train_file=test_18.tsv, max_seq_length=512, per_gpu_train_batch_size=10, per_gpu_eval_batch_size=5
+param_stats = train_type=choice_correct, snippet_type=lvl_5, use_multi_gpu=False, visdom_name=lvl_5, use_fine_tuned_model=False,  total_epochs=3, train_file=test_18_choice_correct.tsv, max_seq_length=512, per_gpu_train_batch_size=10, per_gpu_eval_batch_size=5
 ```
 
 ---
 
 A few important params choosed
 
-- snippet type: lvl_5_3
+- train_type: **choice_correct**
 - per_gpu_train_batch_size: 10
 - total_epochs: 3

@@ -198,6 +198,9 @@ def train(train_task_name, model, tokenizer):
                 scheduler.step() # call optimizer before scheduler 
                 model.zero_grad()
                 global_step += 1
+
+            
+            
             if max_steps > 0 and global_step > max_steps:
                 epoch_iterator.close()
                 break
@@ -205,7 +208,17 @@ def train(train_task_name, model, tokenizer):
     
         epoch += 1 
         # save model at each epoch
-        save_model_in_epoch(epoch)
+        # save_model_in_epoch(epoch)
+        output_model_dir = os.path.join(cache_dir, 'epoch_{}'.format(epoch))
+        if not os.path.exists(output_model_dir):
+            os.makedirs(output_model_dir)
+        model_to_save = model.module if hasattr(model, 'module') else model # take care of distributed/parallel training
+        model_to_save.save_pretrained(output_model_dir)
+        tokenizer.save_pretrained(output_model_dir)
+        torch.save(stats, os.path.join(output_dir, 'training_args.bin'))
+        logger.info('Saving model at epoch %d to %s' % (epoch, output_model_dir))
+
+
 
         # evaluation using saved model
 
@@ -219,28 +232,28 @@ def train(train_task_name, model, tokenizer):
 # In[ ]:
 
 
-def save_model_in_epoch(epoch):
-    epoch = str(epoch)
-    dir_path = f'{cache_dir}epoch_{epoch}/'
-    if not os.path.exists(dir_path):
-        os.mkdir(dir_path)
-    save_model(dir_path)
-    print(dir_path)
+# def save_model_in_epoch(epoch):
+#     epoch = str(epoch)
+#     dir_path = f'{cache_dir}epoch_{epoch}/'
+#     if not os.path.exists(dir_path):
+#         os.mkdir(dir_path)
+#     save_model(dir_path)
+#     print(dir_path)
 
 
 
-def save_model(dir_path):
-    model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
+# def save_model(dir_path):
+#     model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
     
-    # If we save using the predefined names, we can load using `from_pretrained`
-    output_model_file = os.path.join(dir_path, WEIGHTS_NAME)
-    output_config_file = os.path.join(dir_path, CONFIG_NAME)
-    print(output_config_file)
-    torch.save(model_to_save.state_dict(), output_model_file)
-    model_to_save.config.to_json_file(output_config_file)
-    tokenizer.save_vocabulary(dir_path)
+#     # If we save using the predefined names, we can load using `from_pretrained`
+#     output_model_file = os.path.join(dir_path, WEIGHTS_NAME)
+#     output_config_file = os.path.join(dir_path, CONFIG_NAME)
+#     print(output_config_file)
+#     torch.save(model_to_save.state_dict(), output_model_file)
+#     model_to_save.config.to_json_file(output_config_file)
+#     tokenizer.save_vocabulary(dir_path)
     
-    print(f'Model saved successfully at: {dir_path}')
+#     print(f'Model saved successfully at: {dir_path}')
 
 
 # ## evaluation methods
