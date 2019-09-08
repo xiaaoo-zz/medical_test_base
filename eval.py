@@ -8,9 +8,8 @@ from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler,
 from torch.nn import CrossEntropyLoss, MSELoss
 from tqdm import tqdm, trange
 import os
-# from pytorch_transformers import BertTokenizer, BertModel, BertForMaskedLM, BertForSequenceClassification, BertForMultipleChoice
 from pytorch_transformers import BertTokenizer, BertModel, BertForMaskedLM
-from classifiers import BertForSequenceClassification
+from classifiers import CLASSIFIER_CLASSES
 from pytorch_transformers.optimization import AdamW, WarmupLinearSchedule
 from multiprocessing import Pool, cpu_count
 # from BertForMultipleChoice import BertForMultipleChoice
@@ -31,8 +30,9 @@ if do_visualization:
 import logging
 logging.basicConfig(level=logging.INFO)
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+classifier_class = CLASSIFIER_CLASSES[classifier_type]
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 import random
@@ -153,7 +153,7 @@ def evaluate_iterator(test_file_list, epoch_list):
         cache_path = f'{cache_dir}epoch_{epoch}/'
         tokenizer = BertTokenizer.from_pretrained(cache_path, do_lower_case=True)
         # output only one logit
-        model = BertForSequenceClassification.from_pretrained(cache_path, num_labels=1)
+        model = classifier_class.from_pretrained(cache_path, num_labels=1)
 
         model.to(device)
         for file in test_file_list:

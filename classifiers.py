@@ -4,8 +4,6 @@ import torch
 from torch import nn
 from torch.nn import CrossEntropyLoss, MSELoss
 
-
-
 class BertForSequenceClassification(BertPreTrainedModel):
     r"""
         **labels**: (`optional`) ``torch.LongTensor`` of shape ``(batch_size,)``:
@@ -63,3 +61,8 @@ class BertForSequenceClassification(BertPreTrainedModel):
             outputs = (loss,) + outputs
 
         return outputs  # (loss), logits, (hidden_states), (attentions)
+
+
+CLASSIFIER_CLASSES = {
+    'default': BertForSequenceClassification,
+}

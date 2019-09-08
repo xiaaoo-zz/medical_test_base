@@ -6,7 +6,38 @@
 
 ## 1. Customize Classifier
 
-### choice_correct + lvl_5 + train_batch_size 5
+### Step 1. create classifier in [classifier.py](./classifier.py)
+
+```py
+# in classifier.py
+
+# 1. create classifier
+class ExampleClassifier:
+    pass
+
+# 2. add the classifier to dictionary
+CLASSIFIER_CLASSES = {
+    'default': BertForSequenceClassification,
+    'example': ExampleClassifier,
+}
+```
+
+### Step 2. modify [connfig.py](./config.py)
+
+```py
+# 1. change classifier type to whatever you just created
+classifier_type = 'default'
+
+# 2. change this to the correspounding dataset dir name you are using (e.g. lvl_5, lvl_4_short_tf)
+snippet_type = 'lvl_5_3'
+
+# 3. change train batch size to 5 if testing local machine
+per_gpu_train_batch_size = 5 # 10
+```
+
+### Baseline
+
+choice_correct + lvl_5 + train_batch_size 5
 
 | File/Epoch    | 1        | 2      | 3       |
 | ------------- |:--------:| :-----:| :---:   |
@@ -45,6 +76,7 @@ use_fine_tuned_model = True
 
 # change this to the correspounding dataset dir name you are using (e.g. lvl_5, lvl_4_short_tf)
 snippet_type = 'lvl_5_3'
+num_train_epochs = 3
 ```
 
 ### Step 4: train and evaluate

@@ -11,7 +11,6 @@ from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler,
 from torch.nn import CrossEntropyLoss, MSELoss
 from tqdm import tqdm, trange
 import os
-#from pytorch_transformers import BertTokenizer, BertModel, BertForMaskedLM, BertForSequenceClassification, BertForMultipleChoice
 from pytorch_transformers import BertTokenizer, BertModel, BertForMaskedLM
 from pytorch_transformers.optimization import AdamW, WarmupLinearSchedule
 from multiprocessing import Pool, cpu_count
@@ -20,7 +19,7 @@ from utils import *
 # from reports_tools import * # accuracy evaluation methods
 from visualization import * # for live plotting
 from convert_example_to_features import *
-from classifiers import BertForSequenceClassification
+from classifiers import CLASSIFIER_CLASSES
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -50,7 +49,7 @@ set_seed(42) # For reproductivity
 # # Fine tunning bert
 
 # In[ ]:
-
+classifier_class = CLASSIFIER_CLASSES[classifier_type]
 processor = BinaryClassificationProcessor()
 
 train_examples = processor.get_train_examples(data_dir, train_file)
@@ -59,14 +58,14 @@ label_list = processor.get_labels()
 if not use_fine_tuned_model:
     print('using default model')
     tokenizer = BertTokenizer.from_pretrained(bert_model)
-    model = BertForSequenceClassification.from_pretrained(bert_model,
+    model = classifier_class.from_pretrained(bert_model,
 	cache_dir=cache_dir,
         num_labels=1
         )
 else:
     print('!!! using home brewed model')
     tokenizer = BertTokenizer.from_pretrained(cache_dir)
-    model = BertForSequenceClassification.from_pretrained(cache_dir, num_labels=1)
+    model = classifier_class.from_pretrained(cache_dir, num_labels=1)
 
 model.to(device)
 
