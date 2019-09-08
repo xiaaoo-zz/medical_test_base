@@ -13,7 +13,7 @@ snippet_type = 'lvl_5_3' # snippet_type: 11 choices
 train_file_name = 'test_18' # [train, test_17, test_18]
 data_dir = f"data/{snippet_type}"
 per_gpu_train_batch_size = 10 # must be a multiple of 5; set it to 5 if running on local machines
-num_train_epochs = 2
+num_train_epochs = 3
 
 
 ## evaluation params

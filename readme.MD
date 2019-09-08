@@ -1,6 +1,24 @@
 # Bert
 
-## Use fine-tuned bert model
+- [Customize Classifier](#Use-customized-classifier)
+
+- [Fine-tuned Model](#Use-fine-tuned-bert-model)
+
+## 1. Customize Classifier
+
+### choice_correct + lvl_5 + train_batch_size 5
+
+| File/Epoch    | 1        | 2      | 3       |
+| ------------- |:--------:| :-----:| :---:   |
+| test 2017     | 0.2750   | 0.3200 | **0.3483**  |
+| test 2018     | 0.3906   | 0.5325 | 0.5525  |
+
+| File/Epoch    | 1        | 2      | 3       | 4    | 5    |
+| ------------- |:--------:| :-----:| :---:   |:----:         |:----:  |
+| test 2017     | 0.2033   | 0.3016 | 0.3166  | 0.3233    |  **0.3600**   |
+| test 2018     | 0.2988   | 0.4507 | 0.4911    | 0.5809    |  0.6600   |
+
+## 2. Fine-tuned bert model
 
 ### Step 1: put the following fine-tuned output files in [cache](./cache/)
 

@@ -11,7 +11,8 @@ from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler,
 from torch.nn import CrossEntropyLoss, MSELoss
 from tqdm import tqdm, trange
 import os
-from pytorch_transformers import BertTokenizer, BertModel, BertForMaskedLM, BertForSequenceClassification, BertForMultipleChoice
+#from pytorch_transformers import BertTokenizer, BertModel, BertForMaskedLM, BertForSequenceClassification, BertForMultipleChoice
+from pytorch_transformers import BertTokenizer, BertModel, BertForMaskedLM
 from pytorch_transformers.optimization import AdamW, WarmupLinearSchedule
 from multiprocessing import Pool, cpu_count
 
@@ -19,7 +20,7 @@ from utils import *
 # from reports_tools import * # accuracy evaluation methods
 from visualization import * # for live plotting
 from convert_example_to_features import *
-
+from classifiers import BertForSequenceClassification
 
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -174,14 +175,9 @@ def train(train_task_name, model, tokenizer):
             inputs = {'input_ids': batch[0],
                       'attention_mask': batch[1],
                       'token_type_ids': batch[2],
-                      'labels': None}
+                      'labels': batch[3]}
             outputs = model(**inputs) # unpack dict
-            logits = outputs[0] # model outputs are in tuple
-            reshaped_logits = logits.view(-1, 5) # 5: num of choices 
-            _, labels = torch.max(batch[3].view(-1, 5), 1)
-            loss_fct = CrossEntropyLoss()
-            loss = loss_fct(reshaped_logits, labels)
-
+            loss, logits = outputs[:2] # model outputs are in tuple
 
             if gradient_accumulation_steps > 1:
                 loss = loss / gradient_accumulation_steps

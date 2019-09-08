@@ -8,7 +8,9 @@ from torch.utils.data import (DataLoader, RandomSampler, SequentialSampler,
 from torch.nn import CrossEntropyLoss, MSELoss
 from tqdm import tqdm, trange
 import os
-from pytorch_transformers import BertTokenizer, BertModel, BertForMaskedLM, BertForSequenceClassification, BertForMultipleChoice
+# from pytorch_transformers import BertTokenizer, BertModel, BertForMaskedLM, BertForSequenceClassification, BertForMultipleChoice
+from pytorch_transformers import BertTokenizer, BertModel, BertForMaskedLM
+from classifiers import BertForSequenceClassification
 from pytorch_transformers.optimization import AdamW, WarmupLinearSchedule
 from multiprocessing import Pool, cpu_count
 # from BertForMultipleChoice import BertForMultipleChoice
@@ -99,13 +101,14 @@ def evaluate(eval_task_name, model, tokenizer):
             inputs = {'input_ids':      batch[0],
                         'attention_mask': batch[1],
                         'token_type_ids': batch[2],  # change this if using xlnet
-                        'labels':         None}
+                        'labels':         batch[3]}
             outputs = model(**inputs)
-            logits = outputs[0]
-            reshaped_logits = logits.view(-1, 5) # 5: num of choices 
-            _, labels = torch.max(batch[3].view(-1, 5), 1)
-            loss_fct = CrossEntropyLoss()
-            tmp_eval_loss = loss_fct(reshaped_logits, labels)
+            tmp_eval_loss, logits = outputs[:2]
+
+            # reshaped_logits = logits.view(-1, 5) # 5: num of choices 
+            # _, labels = torch.max(batch[3].view(-1, 5), 1)
+            # loss_fct = CrossEntropyLoss()
+            # tmp_eval_loss = loss_fct(reshaped_logits, labels)
 
 
 
