@@ -60,7 +60,7 @@ def evaluate(eval_task_name, model, tokenizer):
         out_label_ids: label for all QC pair 0, 1
     """
     processor = BinaryClassificationProcessor()
-    eval_examples = processor.get_dev_examples(data_dir, f'{eval_task_name}.tsv')
+    eval_examples = processor.get_dev_examples(data_dir, f'{eval_task_name}.tsv',q_type)
     label_list = processor.get_labels()
     eval_features = convert_examples_to_features(eval_examples, 
                                                     label_list, 
@@ -125,8 +125,22 @@ def evaluate(eval_task_name, model, tokenizer):
 
 
     #%%
-    preds_list = np.argmax(preds.reshape(-1,5), 1)
-    labels_list = np.argmax(out_label_ids.reshape(-1,5), 1)
+    # for original classifier
+    # preds_list = np.argmax(preds.reshape(-1,5), 1)
+    # labels_list = np.argmax(out_label_ids.reshape(-1,5), 1)
+
+    # for baseline classifier
+    #preds_list = np.argmax(preds.reshape(-1,25), 1)//5
+    #labels_list = np.argmax(out_label_ids.reshape(-1,25), 1)//5
+
+    # for hidden nodes classifier
+    pred_difference_array = []
+    for items in preds:
+        pred_difference_array.append(items[1] - items[0])
+    pred_difference_array = np.array(pred_difference_array)
+    preds_list = np.argmax(pred_difference_array.reshape(-1,5), 1)
+    labels_list = np.argmax(out_label_ids.reshape(-1,25), 1)//5
+    
 
     #%%
     eval_accuracy = sum([pred == label for pred, label in zip(preds_list, labels_list)]) / len(preds_list)
