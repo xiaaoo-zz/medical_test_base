@@ -16,7 +16,7 @@ from pytorch_transformers.optimization import AdamW, WarmupLinearSchedule
 from multiprocessing import Pool, cpu_count
 
 from utils import *
-# from reports_tools import * # accuracy evaluation methods
+from report_utils import *
 from visualization import * # for live plotting
 from convert_example_to_features import *
 from classifiers import CLASSIFIER_CLASSES
@@ -37,6 +37,7 @@ print(stats)
 # ensure the following statements is evaluated before any other process
 import random
 import numpy as np
+
 def set_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
@@ -46,13 +47,12 @@ def set_seed(seed):
 
 set_seed(42) # For reproductivity
 
-# # Fine tunning bert
 
 # In[ ]:
 classifier_class = CLASSIFIER_CLASSES[classifier_type]
 processor = BinaryClassificationProcessor()
 
-train_examples = processor.get_train_examples(data_dir, train_file)
+train_examples = processor.get_train_examples(data_dir, train_file,q_type)
 label_list = processor.get_labels() 
 
 if not use_fine_tuned_model:
@@ -163,7 +163,7 @@ def train(train_task_name, model, tokenizer):
     tr_loss, loging_loss = 0.0, 0.0
     model.zero_grad()
     train_iterator = trange(int(num_train_epochs), desc='Epoch')
-    
+    saved_loss = []
     for _ in train_iterator:
         
         epoch_iterator = tqdm(train_dataloader, desc="Iteration")
@@ -177,7 +177,7 @@ def train(train_task_name, model, tokenizer):
                       'labels': batch[3]}
             outputs = model(**inputs) # unpack dict
             loss, logits = outputs[:2] # model outputs are in tuple
-
+            saved_loss.append(loss.detach().cpu().numpy().item())
             if gradient_accumulation_steps > 1:
                 loss = loss / gradient_accumulation_steps
 
@@ -203,7 +203,6 @@ def train(train_task_name, model, tokenizer):
     
         epoch += 1 
         # save model at each epoch
-        # save_model_in_epoch(epoch)
         output_model_dir = os.path.join(cache_dir, 'epoch_{}'.format(epoch))
         if not os.path.exists(output_model_dir):
             os.makedirs(output_model_dir)
@@ -221,37 +220,9 @@ def train(train_task_name, model, tokenizer):
             train_iterator.close()
             break
 
+    # draw and save loss-step graph
+    save_loss(saved_loss,global_step)
 
-
-
-# In[ ]:
-
-
-# def save_model_in_epoch(epoch):
-#     epoch = str(epoch)
-#     dir_path = f'{cache_dir}epoch_{epoch}/'
-#     if not os.path.exists(dir_path):
-#         os.mkdir(dir_path)
-#     save_model(dir_path)
-#     print(dir_path)
-
-
-
-# def save_model(dir_path):
-#     model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
-    
-#     # If we save using the predefined names, we can load using `from_pretrained`
-#     output_model_file = os.path.join(dir_path, WEIGHTS_NAME)
-#     output_config_file = os.path.join(dir_path, CONFIG_NAME)
-#     print(output_config_file)
-#     torch.save(model_to_save.state_dict(), output_model_file)
-#     model_to_save.config.to_json_file(output_config_file)
-#     tokenizer.save_vocabulary(dir_path)
-    
-#     print(f'Model saved successfully at: {dir_path}')
-
-
-# ## evaluation methods
 
 # In[ ]:
 
@@ -259,6 +230,3 @@ def train(train_task_name, model, tokenizer):
 train(train_file, model, tokenizer)
 
 
-
-
-#%%

@@ -15,10 +15,9 @@ from multiprocessing import Pool, cpu_count
 # from BertForMultipleChoice import BertForMultipleChoice
 from utils import *
 from convert_example_to_features import *
-# from reports_tools import * # accuracy evaluation methods
 from visualization import * # for live plotting
 
-from eval_reports_analysis_utils import * 
+from report_utils import * 
 
 # FIXME: save this in config 
 

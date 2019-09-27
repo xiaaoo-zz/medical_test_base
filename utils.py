@@ -59,30 +59,33 @@ class DataProcessor(object):
 class BinaryClassificationProcessor(DataProcessor):
     """Processor for the MRPC data set (GLUE version)."""
 
-    def get_train_examples(self, data_dir, train_file):
+    def get_train_examples(self, data_dir, train_file, q_type):
         """See base class."""
         logger.info("LOOKING AT {}".format(os.path.join(data_dir, "train.tsv")))
         return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, train_file)), "train")
+            self._read_tsv(os.path.join(data_dir, train_file)), "train",q_type)
 
-    def get_dev_examples(self, data_dir, test_file):
+    def get_dev_examples(self, data_dir, test_file, q_type):
         """See base class."""
         return self._create_examples(
-            self._read_tsv(os.path.join(data_dir, test_file)), "dev")
+            self._read_tsv(os.path.join(data_dir, test_file)), "dev",q_type)
 
     def get_labels(self):
         """See base class."""
         return ["0", "1"]
 
-    def _create_examples(self, lines, set_type):
+    def _create_examples(self, lines, set_type, q_type):
         """Creates examples for the training and dev sets."""
         examples = []
         for (i, line) in enumerate(lines):
             guid = "%s-%s" % (set_type, i)
-            # print(line)
             text_a = line[3]
             text_b = line[4]
             label = line[1]
-            examples.append(
-                InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
+            assert int(label) in range(5)
+            question_type = line[5]
+            assert question_type in ['A1','A2','A3/A4','B1']
+            if question_type in q_type:
+                examples.append(
+                    InputExample(guid=guid, text_a=text_a, text_b=text_b, label=label))
         return examples
