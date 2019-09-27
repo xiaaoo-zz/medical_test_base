@@ -32,7 +32,6 @@ class BertForSequenceClassification(BertPreTrainedModel):
             _, reshaped_labels = torch.max(labels.view(-1, 5), 1)
             
             loss_fct = CrossEntropyLoss()
-            print(reshaped_logits,reshaped_labels,"2222")
             loss = loss_fct(reshaped_logits, reshaped_labels)
             outputs = (loss,) + outputs
 
@@ -66,7 +65,6 @@ class Baseline(BertPreTrainedModel):
             _, reshaped_labels = torch.max(labels.view(-1, 5), 1)
             
             loss_fct = CrossEntropyLoss()
-            print(reshaped_logits,reshaped_labels,"2222")
             loss = loss_fct(reshaped_logits, reshaped_labels)
             outputs = (loss,) + outputs
 
@@ -92,9 +90,7 @@ class NoHiddenLayerClassification(BertPreTrainedModel):
         # batch size * 768 
         pooled_output = outputs[1] 
         # need reshape
-        print(pooled_output.shape)
         pooled_output = pooled_output.view(1,-1)
-        print(pooled_output.shape)
         pooled_output = self.dropout(pooled_output)
         logits = self.fc1(pooled_output)
 
@@ -104,10 +100,7 @@ class NoHiddenLayerClassification(BertPreTrainedModel):
             model_output = logits
             real_label = torch.tensor([labels[0]],device="cuda")
             loss_fct = CrossEntropyLoss()
-            print(model_output,real_label,"2222")
             loss = loss_fct(model_output, real_label)
-            print(model_output,real_label,"333333")
-            print("loss", loss)
             outputs = (loss,) + outputs
 
         return outputs  # (loss), logits, (hidden_states), (attentions)
@@ -146,10 +139,7 @@ class oneHiddenLayer_768_classifier(BertPreTrainedModel):
             model_output = logits
             real_label = torch.tensor([labels[0]],device="cuda")
             loss_fct = CrossEntropyLoss()
-            print(model_output,real_label,"2222")
             loss = loss_fct(model_output, real_label)
-            print(model_output,real_label,"333333")
-            print("loss", loss)
             outputs = (loss,) + outputs
 
         return outputs  # (loss), logits, (hidden_states), (attentions)
@@ -192,10 +182,7 @@ class twoHiddenLayer_with_3840_768_classifier(BertPreTrainedModel):
             model_output = logits
             real_label = torch.tensor([labels[0]],device="cuda")
             loss_fct = CrossEntropyLoss()
-            print(model_output,real_label,"2222")
             loss = loss_fct(model_output, real_label)
-            print(model_output,real_label,"333333")
-            print("loss", loss)
             outputs = (loss,) + outputs
 
         return outputs  # (loss), logits, (hidden_states), (attentions)
@@ -240,10 +227,7 @@ class twoHiddenLayer_with_3840_3840_classifier(BertPreTrainedModel):
             model_output = logits
             real_label = torch.tensor([labels[0]],device="cuda")
             loss_fct = CrossEntropyLoss()
-            print(model_output,real_label,"2222")
             loss = loss_fct(model_output, real_label)
-            print(model_output,real_label,"333333")
-            print("loss", loss)
             outputs = (loss,) + outputs
 
         return outputs  # (loss), logits, (hidden_states), (attentions)

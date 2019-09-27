@@ -10,5 +10,6 @@ conda activate tensorflow
 date
 
 python bert.py && python eval.py
+# python eval.py
 
 date
